@@ -1,26 +1,41 @@
+
 provider "aws" {
   profile    = "aula-terraform"
   region = "us-east-1"
 }
 
-resource "aws_instance" "app" {
+module "app" {
+  source = "./modules/server"
   ami = var.ami["us-east-1"]
-  instance_type =  var.tipo_instancia
-  key_name = "aula-terraform"
-  vpc_security_group_ids = [aws_security_group.allow_ssh.id]
-  depends_on = [aws_s3_bucket.ansible_bucket]
-
+  security_groups_ids = [aws_security_group.allow_http.id]
+  user_data = templatefile("scripts/prepara_web.sh.tpl", { db_instance_ip = module.db.ip_privado })
   tags = {
-      Name = "aplicacao"
+    Name = "aplicacao"
   }
 }
 
-resource "aws_instance" "db" {
+module "db" {
+  source = "./modules/server"
   ami = var.ami["us-east-1"]
-  instance_type =  var.tipo_instancia
-  key_name = "aula-terraform"
-  vpc_security_group_ids = [aws_security_group.allow_ssh.id]
+  security_groups_ids = [aws_security_group.allow_postgres.id]
+  user_data = file("scripts/prepara_bd.sh")
   tags = {
-      Name = "db"
+    Name = "db"
   }
+}
+
+module "s3" {
+  source = "./modules/s3_bucket"
+  bucket_name = "ansible-config-emanuel"
+  upload_file = {
+    src = "ansible/node-js-getting-started-master.zip",
+    dest = "ansible/node-js-getting-started-master.zip"
+  }
+  tags = {
+      Name = "Aula Terraform"
+  }
+}
+
+output "ip_app" {
+     value = "${module.app.ip_publico}"
 }
